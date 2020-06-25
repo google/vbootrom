@@ -20,7 +20,7 @@ OBJCOPY		= $(CROSS_COMPILE)objcopy
 CFLAGS		= -Os -g -mcpu=cortex-a9
 ASFLAGS		= $(CFLAGS) -Wa,-mcpu=cortex-a9+mp
 LDSCRIPT	= bootrom.ld
-LDFLAGS		= -nostdlib -T $(LDSCRIPT)
+LDFLAGS		= -Wl,--build-id=none -static -nostdlib -T $(LDSCRIPT)
 
 OBJS		:= start.o image.o
 
