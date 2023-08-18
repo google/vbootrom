@@ -29,9 +29,7 @@
 
 #define UBOOT_TAG       0x4c42544f4f42550aULL  /* .UBOOTBL */
 #define UBOOT_MAGIC     0x1400000a
-#define UBOOT_SIZE      0xae680
-#define UBOOT_INVALID   0xffffffff
-#define UBOOT_DEST      0x7e00
+#define UBOOT_SIZE      0xb0000
 
 /*
  * This structure must reside at offset 0x100 in SRAM.
@@ -78,26 +76,28 @@ void copy_boot_image(uintptr_t dest_addr, uintptr_t src_addr, int32_t len)
     }
 }
 
-static void search_and_load_uboot(uintptr_t end)
+static uint32_t search_and_load_uboot(uintptr_t end)
 {
     uintptr_t addr;
-    uintptr_t src_addr, dest_addr = UBOOT_DEST;
+    uintptr_t src_addr, dest_addr;
+    uint32_t size;
 
     for (addr = 0; addr < end; addr += 0x100) {
         src_addr = SPI0CS0 + addr;
         if ((*(uint64_t *)src_addr == UBOOT_TAG) &&
             (*(uint32_t *)(src_addr + 0x200) == UBOOT_MAGIC)) {
-            copy_boot_image(dest_addr, src_addr, UBOOT_SIZE);
-            return;
+            dest_addr = image_read_u32(src_addr, 0x1f8);
+            size = image_read_u32(src_addr, 0x1fc);
+            copy_boot_image(dest_addr, src_addr, size);
+            return dest_addr;
         }
     }
+    return 0;
 }
 
 uintptr_t load_boot_image(void)
 {
     /* Set CLKSEL to similar values as NPCM7XX */
     reg_write(CLK, CLK_CLKSEL, CLK_CLKSEL_DEFAULT);
-    search_and_load_uboot(0x200000);
-
-    return UBOOT_DEST + 0x200;
+    return search_and_load_uboot(0x200000) + 0x200;
 }
