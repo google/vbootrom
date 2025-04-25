@@ -61,9 +61,15 @@ static const char *splash_screen =
       "| | / / __  / / / / / / / / / / /_/ / / / / /|_/ /_____/ /| | \\__ \\ / /  __/ /  / /|   / / / /\n"
       "| |/ / /_/ / /_/ / /_/ / / / / _, _/ /_/ / /  / /_____/ ___ |___/ // /  / __/  / //   / /_/ /\n"
       "|___/_____/\\____/\\____/ /_/ /_/ |_|\\____/_/  /_/     /_/  |_/____//_/  /____/ /_//_/|_\\____/\n"
-      "\n"
-      "Version:1.0.0\n"
       "\n";
+
+static void print_build_info()
+{
+   uprintf("%s", splash_screen);
+   uprintf("Build Date : %s %s\n", __DATE__, __TIME__);
+   uprintf("FW Version : %s\n", GIT_VERSION);
+   uprintf("\n");
+}
 
 /*
  * Remap 32-bit BootMCU load address to 64-bit Cortex-A35 DRAM address.
@@ -369,8 +375,7 @@ uint64_t load_boot_image(void)
     uart_aspeed_init(UART12);
     uart_console_register(&ucons);
 
-    uprintf("%s", splash_screen);
-
+    print_build_info();
     fit_blob = find_fit_image(FIT_SEARCH_START,
                               FIT_SEARCH_END,
                               FIT_SEARCH_STEP);
