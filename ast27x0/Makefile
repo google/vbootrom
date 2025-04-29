@@ -19,6 +19,8 @@ CC		?= $(CROSS_COMPILE)gcc
 OBJCOPY		?= $(CROSS_COMPILE)objcopy
 OBJDUMP		?= $(CROSS_COMPILE)objdump
 
+GIT_VERSION := git-$(shell git rev-parse --short HEAD)
+
 # Why we use -no-pie -fno-pic in bare-metal builds:
 #
 # By default, modern GCC compilers enable PIE (Position-Independent Executable)
@@ -39,6 +41,7 @@ OBJDUMP		?= $(CROSS_COMPILE)objdump
 CFLAGS		= -Os -Wall -Wextra -g -mcpu=cortex-a35 -fno-stack-protector \
 		  -no-pie -fno-pic \
 		  -I ./include -I ../lib/libfdt -I ../lib/libc/minimal/include
+CFLAGS      += -DGIT_VERSION=\"$(GIT_VERSION)\"
 ASFLAGS		= $(CFLAGS) -Wa,-mcpu=cortex-a35
 LDSCRIPT	= bootrom.ld
 MAPFILE		= bootrom.map
