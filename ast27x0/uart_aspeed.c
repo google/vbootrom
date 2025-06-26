@@ -18,12 +18,6 @@
 #include <uart.h>
 #include <io.h>
 
-#define BITS_PER_LONG (sizeof(unsigned long) * 8)
-#define GENMASK(h, l) \
-    (((~0UL) >> (BITS_PER_LONG - ((h) - (l) + 1))) << (l))
-
-#define BIT(x) (1UL << (x))
-
 /* UART registers */
 #define UART_THR 0x00
 #define UART_DLL 0x00
