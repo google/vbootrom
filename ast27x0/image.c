@@ -21,17 +21,20 @@
 #include <libfdt.h>
 #include <uart.h>
 #include <uart_console.h>
+#include <io.h>
+#include <image.h>
+#include <ssp_tsp.h>
 
 #define DEBUG 0
-#define DRAM_ADDR 0x400000000ULL
-#define FMCCS0  0x100000000ULL
-#define UART12  0x14C33B00
 
 #define FIT_SEARCH_START (FMCCS0)
 #define FIT_SEARCH_END   (FMCCS0 + 0x400000)
 #define FIT_SEARCH_STEP  0x10000
 
 extern void panic(const char *);
+
+static bool has_sspfw;
+static bool has_tspfw;
 
 /*
  * This global struct is explicitly initialized, so it is placed in the .data
@@ -274,7 +277,8 @@ static uint64_t load_uboot_image(const void *fit_blob)
  * if some images do not define explicit load addresses in the FIT.
  */
 static void load_other_fit_images(const void *fit_blob, uint64_t uboot_end,
-                                  uint64_t *dest_addr)
+                                  uint64_t *dest_addr,
+                                  const struct reserved_mem_info *info)
 {
     uintptr_t data_offset;
     uint64_t load_addr;
@@ -315,6 +319,17 @@ static void load_other_fit_images(const void *fit_blob, uint64_t uboot_end,
             /* The next image to jump to is BL31 (Trusted Firmware-A) */
             if (strcmp(name, "atf") == 0) {
                 *dest_addr = dram_addr;
+            }
+
+            /* Init co-processor */
+            if (strcmp(name, "sspfw") == 0) {
+                ssp_init(dram_addr, info);
+                has_sspfw = true;
+            }
+
+            if (strcmp(name, "tspfw") == 0) {
+                tsp_init(dram_addr, info);
+                has_tspfw = true;
             }
         } else if (strcmp(name, "fdt") == 0 && uboot_end) {
             /* fdt has no load address, fallback to uboot_end */
@@ -366,17 +381,111 @@ static const void *find_fit_image(uint64_t start_addr, uint64_t end_addr,
     return NULL;
 }
 
+static int find_fmc_image(uint64_t start_addr, uint64_t end_addr,
+                          uint64_t search_step, struct fmc_img_info *info)
+{
+    struct ast_fmc_header *hdr;
+    uint32_t fmc_header_size;
+    uint32_t payload_size;
+    uint32_t total_size;
+    uint64_t addr;
+
+    if (info == NULL) {
+        return 0;
+    }
+
+    fmc_header_size = sizeof(struct ast_fmc_header);
+
+    for (addr = start_addr;
+         addr + fmc_header_size <= end_addr;
+         addr += search_step) {
+        hdr = (struct ast_fmc_header *)addr;
+
+        if (hdr->preamble.magic == FMC_HDR_MAGIC) {
+            payload_size = hdr->body.size;
+            total_size = fmc_header_size + payload_size;
+
+            if (payload_size > 0 && (addr + total_size) <= end_addr) {
+                info->payload_start = addr + fmc_header_size;
+                info->payload_end = ALIGN_UP(addr + total_size, search_step);
+                uprintf("Found valid FMC v%d image at 0x%lx (size: 0x%x)",
+                        hdr->preamble.version, addr, total_size);
+                uprintf(", next FIT search @ 0x%lx\n", info->payload_end);
+                return 1;
+            }
+        }
+    }
+
+    uprintf("No valid FMC image found in range 0x%lx - 0x%lx (step: 0x%lx)\n",
+            start_addr, end_addr, search_step);
+
+    return 0;
+}
+
+static void *load_dtb_after_fmc(uint64_t fmc_end, uint64_t end_addr)
+{
+    void *dram_dtb_addr = (void *)(uintptr_t)DRAM_ADDR;
+    const uint32_t *magic_ptr;
+    size_t copy_size;
+    uint64_t addr;
+
+    for (addr = ALIGN_UP(fmc_end, 4); addr + 4 < end_addr; addr += 4) {
+        /* Check for DTB magic number (aligned on 4-byte boundary) */
+        magic_ptr = (const uint32_t *)(uintptr_t)addr;
+        if (*magic_ptr != cpu_to_fdt32(FDT_MAGIC)) {
+            continue;
+        }
+
+        /* Copy from flash to DRAM for validation */
+        copy_size = end_addr - addr;
+        memcpy(dram_dtb_addr, (const void *)(uintptr_t)addr, copy_size);
+
+        /* Verify if the copied region is a valid DTB */
+        if (fdt_check_header(dram_dtb_addr) == 0) {
+            uprintf("Valid DTB found at 0x%lx, copied to 0x%lx\n",
+                    addr, (uint64_t)dram_dtb_addr);
+            return dram_dtb_addr;
+        } else {
+            uprintf("FDT_MAGIC at 0x%lx but invalid DTB header\n", addr);
+        }
+    }
+
+    uprintf("No valid DTB found between 0x%lx and 0x%lx\n", fmc_end, end_addr);
+    return NULL;
+}
+
 uint64_t load_boot_image(void)
 {
+    struct reserved_mem_info reservedinfo = {0};
+    struct fmc_img_info fmcinfo = {0};
+    uint64_t search_next_addr;
     uint64_t bl31_addr = 0;
     const void *fit_blob;
+    void *dtb_ptr = NULL;
     uint64_t uboot_end;
 
     uart_aspeed_init(UART12);
     uart_console_register(&ucons);
 
     print_build_info();
-    fit_blob = find_fit_image(FIT_SEARCH_START,
+
+    search_next_addr = FIT_SEARCH_START;
+
+    /* Find FMC image */
+    if (find_fmc_image(search_next_addr, FIT_SEARCH_END, FIT_SEARCH_STEP,
+                       &fmcinfo)) {
+        search_next_addr =  fmcinfo.payload_end;
+
+        /* Try to find and load a valid SPL DTB between FMC and U-Boot FIT */
+        dtb_ptr = load_dtb_after_fmc(fmcinfo.payload_start,
+                                     fmcinfo.payload_end);
+        if (dtb_ptr) {
+            get_reserved_memory(dtb_ptr, &reservedinfo);
+        }
+    }
+
+    /* Find U-Boot FIT imag */
+    fit_blob = find_fit_image(search_next_addr,
                               FIT_SEARCH_END,
                               FIT_SEARCH_STEP);
     if (!fit_blob) {
@@ -393,13 +502,23 @@ uint64_t load_boot_image(void)
         panic("");
     }
 
-    load_other_fit_images(fit_blob, uboot_end, &bl31_addr);
+    load_other_fit_images(fit_blob, uboot_end, &bl31_addr, &reservedinfo);
 
     if (!bl31_addr) {
         uprintf("Error: BL31 (Trusted Firmware-A) not found, halting.\n");
         panic("");
     }
+
+    if (has_sspfw) {
+        ssp_enable();
+    }
+
+    if (has_tspfw) {
+        tsp_enable();
+    }
+
     uprintf("\nJumping to BL31 (Trusted Firmware-A) at 0x%lx\n\n",
             bl31_addr);
     return bl31_addr;
 }
+

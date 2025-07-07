@@ -14,6 +14,8 @@
 #ifndef __AST27X0_INCLUDE_UART_H__
 #define __AST27X0_INCLUDE_UART_H__
 
+#define UART12  0x14C33B00
+
 /**
  * @brief UART Interface
  * @defgroup uart_interface UART Interface
