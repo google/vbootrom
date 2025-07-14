@@ -31,6 +31,8 @@
 
 /* SCU */
 #define ASPEED_CPU_SCU_BASE 0x12C02000
+#define SCU_CPU_RST_SSP     BIT(30)
+#define SCU_CPU_RST2_TSP    BIT(9)
 
 struct ast2700_scu0 {
     uint32_t rsv_0x11c[72];     /* 0x000 ~ 0x11C */
@@ -58,6 +60,16 @@ struct ast2700_scu0 {
     uint32_t tsp_ctrl_5;        /* 0x178 */
     uint32_t rsv_0x17c[6];      /* 0x17C ~ 0x190 */
     uint32_t tsp_remap_size;    /* 0x194 */
+    uint32_t rsv_0x198[26];     /* 0x198 ~ 0x1FC */
+    uint32_t modrst1_ctrl;      /* 0x200 */
+    uint32_t modrst1_clr;       /* 0x204 */
+    uint32_t rsv_0x208[2];      /* 0x208 ~ 0x20C */
+    uint32_t modrst1_lock;      /* 0x210 */
+    uint32_t modrst1_prot1;     /* 0x214 */
+    uint32_t modrst1_prot2;     /* 0x218 */
+    uint32_t modrst1_prot3;     /* 0x21C */
+    uint32_t modrst2_ctrl;      /* 0x220 */
+    uint32_t modrst2_clr;       /* 0x224 */
 };
 
 /* SSP control register 0 */

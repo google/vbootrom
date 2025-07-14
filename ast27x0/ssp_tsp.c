@@ -77,6 +77,9 @@ int ssp_init(uint64_t load_addr, const struct reserved_mem_info *info)
         return 0;
     }
 
+    writel(SCU_CPU_RST_SSP, (void *)&scu->modrst1_ctrl);
+    writel(SCU_CPU_RST_SSP, (void *)&scu->modrst1_clr);
+
     reg_val = SCU_CPU_SSP_TSP_NIDEN | SCU_CPU_SSP_TSP_DBGEN |
               SCU_CPU_SSP_TSP_DBG_ENABLE | SCU_CPU_SSP_TSP_RESET;
     writel(reg_val, (void *)&scu->ssp_ctrl_0);
@@ -154,6 +157,9 @@ int tsp_init(uint64_t load_addr, const struct reserved_mem_info *info)
     if (!(reg_val & SCU_CPU_SSP_TSP_RESET_STS)) {
         return 0;
     }
+
+    writel(SCU_CPU_RST2_TSP, (void *)&scu->modrst2_ctrl);
+    writel(SCU_CPU_RST2_TSP, (void *)&scu->modrst2_clr);
 
     reg_val = SCU_CPU_SSP_TSP_NIDEN | SCU_CPU_SSP_TSP_DBGEN |
               SCU_CPU_SSP_TSP_DBG_ENABLE | SCU_CPU_SSP_TSP_RESET;
