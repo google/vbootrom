@@ -15,9 +15,9 @@
 
 CROSS_COMPILE	?= aarch64-linux-gnu-
 
-CC		?= $(CROSS_COMPILE)gcc
-OBJCOPY		?= $(CROSS_COMPILE)objcopy
-OBJDUMP		?= $(CROSS_COMPILE)objdump
+CC		= $(CROSS_COMPILE)gcc
+OBJCOPY		= $(CROSS_COMPILE)objcopy
+OBJDUMP		= $(CROSS_COMPILE)objdump
 
 GIT_VERSION := git-$(shell git rev-parse --short HEAD)
 
